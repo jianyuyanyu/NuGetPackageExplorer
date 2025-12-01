@@ -48,20 +48,25 @@
         <DefineConstants>$(DefineConstants);USE_MONACO_EDITOR</DefineConstants>
 
         <WasmShellEnableIDBFS>true</WasmShellEnableIDBFS>
-        <!--<WasmShellMonoRuntimeExecutionMode>InterpreterAndAOT</WasmShellMonoRuntimeExecutionMode>-->
+        <WasmShellMonoRuntimeExecutionMode>InterpreterAndAOT</WasmShellMonoRuntimeExecutionMode>
         <WasmShellEnableEmccProfiling>true</WasmShellEnableEmccProfiling>
 
         <!-- Disable the jitinterpreter for possible interp crash -->
         <!--<WasmShellEnableJiterpreter>false</WasmShellEnableJiterpreter>-->
 
         <!--<WasmShellGenerateAOTProfile>true</WasmShellGenerateAOTProfile>-->
+        <!--<WasmShellGenerateAOTProfileDebugList>true</WasmShellGenerateAOTProfileDebugList>-->
+        <!--<WasmShellAOTProfileExcludedMethods>Dummy</WasmShellAOTProfileExcludedMethods>-->
       </PropertyGroup>
 
       <ItemGroup>
-        <!--<WasmShellEnableAotProfile Include="$(NpeSrcRoot)\Build\aot.profile" />-->
+        <WasmShellEnableAotProfile Include="$(NpeSrcRoot)Build\aot.profile" />
         
         <WasmShellMonoEnvironment Include="MSDL_PROXY_LOCATION" Value="$(MsdlApiBaseLocation)" />
 
+        <!-- Exclude SkiaSharp from mixed mode loading to avoid issues on WebAssembly AOT -->    
+        <MonoRuntimeMixedModeExcludedAssembly Include="SkiaSharp" />  
+        
         <!-- This value must be the instrumentation key, not the connection string -->
         <WasmShellMonoEnvironment Include="NPE_AI_INSTRUMENTATIONKEY" Value="$(NpeAiInstrumentationKey)" />
         <WasmShellMonoEnvironment Include="MONO_GC_PARAMS" Value="soft-heap-limit=512m,nursery-size=64m,evacuation-threshold=66,major=marksweep" />
