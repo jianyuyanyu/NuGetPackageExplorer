@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.Composition;
 using System.ComponentModel.Composition.Hosting;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Windows;
@@ -62,6 +63,10 @@ namespace PackageExplorer
         private async void Application_Startup(object sender, StartupEventArgs e)
         {
             DiagnosticsClient.TrackEvent("AppStart", new Dictionary<string, string> { { "launchType", e.Args.Length > 0 ? "fileAssociation" : "shortcut" } });
+            if (!PluginInventoryTelemetry.TryTrack(() => Container.GetExportedValue<IPluginManager>()!, out var pluginInventoryError))
+            {
+                Trace.TraceWarning($"Failed to track plugin inventory: {pluginInventoryError}");
+            }
 
             // Overwrite settings with the real instance
             Resources["Settings"] = Container.GetExportedValue<ISettingsManager>();

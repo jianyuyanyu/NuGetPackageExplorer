@@ -1,14 +1,27 @@
-﻿define([`${config.uno_app_base}/ai.3.3.6.min.js`], () => {
+let appInsights = null;
 
-    // disable telemetry if the instrumentation key is not set so we don't get bad requests
-    const key = config.environmentVariables['NPE_AI_INSTRUMENTATIONKEY'] || null;
-    var snippet = {
+define([`${config.uno_app_base}/ai.3.3.6.min.js`], () => {
+    const key = (config.environmentVariables['NPE_AI_INSTRUMENTATIONKEY'] || '').trim();
+    if (!key) {
+        return;
+    }
+
+    const snippet = {
         config: {
-            connectionString: key || 'InstrumentationKey=00000000-0000-0000-0000-000000000000',
-            disableTelemetry: !key
+            disableTelemetry: false
         }
     };
-    
-    var init = new Microsoft.ApplicationInsights.ApplicationInsights(snippet);
-    appInsights = init.loadAppInsights();
+
+    if (key.includes('=')) {
+        snippet.config.connectionString = key;
+    } else {
+        snippet.config.instrumentationKey = key;
+    }
+
+    try {
+        const init = new Microsoft.ApplicationInsights.ApplicationInsights(snippet);
+        appInsights = init.loadAppInsights();
+    } catch (error) {
+        console.warn('Application Insights disabled:', error);
+    }
 });

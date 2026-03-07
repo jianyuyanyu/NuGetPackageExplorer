@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.IO;
 using System.Windows.Input;
 
 using NuGet.Packaging;
@@ -170,6 +171,11 @@ namespace PackageExplorerViewModel
         {
             if (!Name.Equals(newName, StringComparison.Ordinal))
             {
+                if (!IsSafePathSegment(newName))
+                {
+                    return;
+                }
+
                 if (_parent != null)
                 {
                     if (!Name.Equals(newName, StringComparison.OrdinalIgnoreCase) &&
@@ -271,6 +277,19 @@ namespace PackageExplorerViewModel
 
         protected virtual void Dispose(bool disposing)
         {
+        }
+
+        protected static bool IsSafePathSegment(string pathSegment)
+        {
+            try
+            {
+                PackagePathUtility.NormalizePathSegment(pathSegment);
+                return true;
+            }
+            catch (InvalidDataException)
+            {
+                return false;
+            }
         }
 
         ~PackagePart()

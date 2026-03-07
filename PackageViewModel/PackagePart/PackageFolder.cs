@@ -163,6 +163,11 @@ namespace PackageExplorerViewModel
                 return false;
             }
 
+            if (!IsSafePathSegment(folderName))
+            {
+                return false;
+            }
+
             if (PackageViewModel?.IsSigned == true || PackageViewModel?.IsInEditFileMode == true)
             {
                 return false;
@@ -443,7 +448,9 @@ namespace PackageExplorerViewModel
 
         public override void Export(string rootPath)
         {
-            var fullPath = System.IO.Path.Combine(rootPath, Path);
+            var fullPath = string.IsNullOrEmpty(Path)
+                ? global::System.IO.Path.GetFullPath(rootPath)
+                : PackagePathUtility.ResolvePathUnderRoot(rootPath, Path);
             if (!Directory.Exists(fullPath))
             {
                 Directory.CreateDirectory(fullPath);
