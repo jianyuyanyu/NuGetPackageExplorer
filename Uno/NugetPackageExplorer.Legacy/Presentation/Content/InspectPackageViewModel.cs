@@ -6,6 +6,7 @@ using NuGet.Packaging.Core;
 using NuGet.Versioning;
 
 using NuGetPackageExplorer.Types;
+using NuGetPackageExplorer.Core.Async;
 
 using NuGetPe;
 
@@ -83,6 +84,8 @@ namespace NupkgExplorer.Presentation.Content
 
         public static async Task<InspectPackageViewModel?> CreateFromLocalPackage(StorageFile packageFile)
         {
+            ArgumentNullException.ThrowIfNull(packageFile);
+
             // since the file returned by OpenFilePicker cannot be opened by its path
             // we are copying the file to the browser storage
             var localFolder = ApplicationData.Current.LocalFolder;
@@ -182,16 +185,16 @@ namespace NupkgExplorer.Presentation.Content
             try
             {
                 var dialog = DefaultContainer.GetExportedValue<DialogService>()!;
-                using var cts = new CancellationDisposable();
+                var cts = new CancellationDisposable();
                 var progressVM = new DownloadProgressDialogViewModel(identity.Id, identity.Version.ToNormalizedString(), cts);
 
-                var dialogTask = dialog.ShowAsync(cts.Token, progressVM);
-                var downloadPackageTask = DownloadPackage();
-
-                var completed = await Task.WhenAny(dialogTask, downloadPackageTask);
-                if (completed == downloadPackageTask)
+                try
                 {
-                    var packageVM = await factory.CreateViewModel(downloadPackageTask.Result, downloadPackageTask.Result?.Source, NuGetConstants.DefaultFeedUrl);
+                    var dialogTask = dialog.ShowAsync(cts.Token, progressVM);
+                    var downloadPackageTask = DownloadPackage(cts.Token);
+                    var downloadedPackage = await OptionalDialogCoordinator.WaitForResultAsync(downloadPackageTask, dialogTask, cts.Token);
+
+                    var packageVM = await factory.CreateViewModel(downloadedPackage, downloadedPackage?.Source, NuGetConstants.DefaultFeedUrl);
                     if (packageVM == null)
                     {
                         throw new InvalidOperationException("Failed to create package view model");
@@ -200,22 +203,22 @@ namespace NupkgExplorer.Presentation.Content
 
                     return vm;
                 }
-                else
+                finally
                 {
-                    throw new OperationCanceledException();
+                    cts.Dispose();
                 }
             }
-            catch (AggregateException ae) when (ae.GetPossibleInnerException<HttpResponseExceptionWithStatusCode>() is { StatusCode: HttpStatusCode.NotFound } e)
+            catch (AggregateException ae) when (ae.GetPossibleInnerException<HttpRequestException>() is { StatusCode: HttpStatusCode.NotFound })
             {
                 throw new PackageNotFoundException($"Package '{identity.Id} {identity.Version}' not found");
             }
 
-            Task<ISignaturePackage?> DownloadPackage()
+            Task<ISignaturePackage?> DownloadPackage(CancellationToken cancellationToken)
             {
                 var downloader = DefaultContainer.GetExportedValue<INuGetPackageDownloader>()!;
                 var repository = PackageRepositoryFactory.CreateRepository(NuGetConstants.DefaultFeedUrl);
 
-                return downloader.Download(repository, identity);
+                return downloader.Download(repository, identity, cancellationToken);
             }
         }
 

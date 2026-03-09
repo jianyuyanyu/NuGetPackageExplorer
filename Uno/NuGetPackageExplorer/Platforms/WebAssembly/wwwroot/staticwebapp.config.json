@@ -1,15 +1,14 @@
 {
   "platform": {
-    "apiRuntime": "dotnet-isolated:8.0"
+    "apiRuntime": "dotnet-isolated:9.0"
   },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
       "/_framework/*",
-      "/package_*",
       "*.{css,js}",
       "*.{png}",
-      "*.{c,h,wasm,clr,pdb,dat,txt}"
+      "*.{c,h,wasm,clr,pdb,dat,txt,dll,json,br,gz}"
     ]
   },
   "mimeTypes": {

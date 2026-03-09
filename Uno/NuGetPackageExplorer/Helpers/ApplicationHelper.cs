@@ -37,14 +37,56 @@ namespace NuGetPackageExplorer.Helpers
 
             var uri = absoluteOrRelativeUri.IsAbsoluteUri
                 ? absoluteOrRelativeUri
-                : new Uri(new Uri(InvokeJS("window.location")), absoluteOrRelativeUri);
+                : new Uri(GetApplicationBaseLocation(), absoluteOrRelativeUri.OriginalString.TrimStart('/'));
 
             ReplaceUrl(uri.AbsoluteUri);
         }
         public static Uri GetApplicationBaseLocation()
         {
-            var location = new Uri(InvokeJS("window.location"));
-            return new Uri(location.GetLeftPart(UriPartial.Authority));
+            var baseLocation = InvokeJS(
+                """
+                (() => {
+                    const resolutionBase = document.baseURI || window.location.href;
+                    const baseElement = document.querySelector('base[href]');
+                    let basePath = '';
+
+                    if (baseElement) {
+                        try {
+                            const baseUrl = new URL(baseElement.getAttribute('href'), resolutionBase);
+                            basePath = baseUrl.pathname || '';
+                        } catch {
+                        }
+                    }
+
+                    if (!basePath) {
+                        const bootstrapScript = document.querySelector('script[src*="uno-bootstrap.js"]');
+                        const scriptSource = bootstrapScript?.getAttribute('src') ?? '/';
+                        const scriptUrl = new URL(scriptSource, resolutionBase);
+                        const scriptPath = scriptUrl.pathname || '/';
+                        const packageMarkerIndex = scriptPath.indexOf('/package_');
+
+                        if (packageMarkerIndex >= 0) {
+                            basePath = scriptPath.substring(0, packageMarkerIndex);
+                        } else {
+                            const lastSlash = scriptPath.lastIndexOf('/');
+                            basePath = lastSlash > 0 ? scriptPath.substring(0, lastSlash) : '/';
+                        }
+                    }
+
+                    if (!basePath) {
+                        basePath = '/';
+                    }
+
+                    if (!basePath.endsWith('/')) {
+                        basePath += '/';
+                    }
+
+                    return new URL(basePath, window.location.origin).toString();
+                })()
+                """
+            );
+
+            return new Uri(baseLocation);
         }
     }
 }

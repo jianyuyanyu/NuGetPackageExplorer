@@ -17,6 +17,7 @@ using NuGet.Protocol;
 using NuGet.Versioning;
 
 using NuGetPackageExplorer.Extensions;
+using NuGetPackageExplorer.Core.DeepLinking;
 using NuGetPackageExplorer.Types;
 
 using NuGetPe;
@@ -118,16 +119,17 @@ namespace PackageExplorer
         /// Invoked when the application is launched normally by the end user.  Other entry points
         /// will be used such as when the application is launched to open a specific file.
         /// </summary>
-        /// <param name="e">Details about the launch request and process.</param>
+        /// <param name="args">Details about the launch request and process.</param>
         [RequiresUnreferencedCode("MEF composition resolves views and view models via reflection during application launch.")]
-        protected override async void OnLaunched(LaunchActivatedEventArgs e) =>
-            //await OnLaunched<MainWindow>(e, Container.GetExportedValue<MainWindow>, PerformMainLandingNavigation)
-            await OnLaunched<Shell>(e, BuildShell, PerformShellLandingNavigation)
+        protected override async void OnLaunched(LaunchActivatedEventArgs args) =>
+            //await OnLaunched<MainWindow>(args, Container.GetExportedValue<MainWindow>, PerformMainLandingNavigation)
+            await OnLaunched<Shell>(args, BuildShell, PerformShellLandingNavigation)
                 .ConfigureAwait(true);
 
         [RequiresUnreferencedCode("MEF composition resolves views and view models via reflection during application launch.")]
         private async Task OnLaunched<TRootPage>(LaunchActivatedEventArgs e, Func<TRootPage?> buildRoot, Func<TRootPage, LaunchActivatedEventArgs, Task> landingNavigation) where TRootPage : UIElement
         {
+            ArgumentNullException.ThrowIfNull(e);
             ArgumentNullException.ThrowIfNull(buildRoot);
             ArgumentNullException.ThrowIfNull(landingNavigation);
 
@@ -211,7 +213,7 @@ namespace PackageExplorer
 
                 DiagnosticsClient.TrackPageView(e.Content.GetType().Name);
             };
-            frame.NavigationFailed += (s, e) => throw new Exception($"Failed to load {e.SourcePageType.FullName}: {e.Exception}");
+            frame.NavigationFailed += (s, e) => throw new InvalidOperationException($"Failed to load {e.SourcePageType.FullName}: {e.Exception}", e.Exception);
 
             var service = Container.GetExportedValue<NavigationService>()!;
 
@@ -298,7 +300,10 @@ namespace PackageExplorer
 
                 await new MessageDialog(ex.Message, nameof(PackageNotFoundException)).ShowAsync();
 
-                if (deeplink is not PackageIdentity identity) throw new InvalidOperationException();
+                if (deeplink is not PackageIdentity identity)
+                {
+                    throw new InvalidOperationException("Package deeplink was expected after a package-not-found failure.");
+                }
 
                 var vm = new FeedPackagePickerViewModel(identity.Id);
 
@@ -380,52 +385,17 @@ namespace PackageExplorer
                 }
 
                 var uri = new Uri(location);
-                var subpaths = uri.Segments
-                    .Skip(1) // skip first item that is just "/"
-                    .Select(static x => x.TrimEnd('/')) // remove segment separator
-                    .ToArray();
+                var applicationBasePath = NuGetPackageExplorer.Helpers.ApplicationHelper.GetApplicationBaseLocation().AbsolutePath;
+                var route = WasmPackageRouteParser.Parse(uri, applicationBasePath);
 
-                // Process `/packages` route
-                if (subpaths.Any() && "packages".Equals(subpaths[0], StringComparison.OrdinalIgnoreCase))
+                return route switch
                 {
-                    // nuget.org considers any subpath after version as invalid, eg: /packages/xyz/3.1.2/invalid
-                    if (subpaths.Length >= 4)
-                    {
-                        throw new FormatException($"Invalid path: {location}");
-                    }
-
-                    // Try to extract a direct package link, like: /packages/xyz, /packages/xyz/3.1.2
-                    if (subpaths.Length >= 2)
-                    {
-                        var id = subpaths[1];
-                        var version = default(NuGetVersion);
-                        if (subpaths.Length >= 3 && !NuGetVersion.TryParse(subpaths[2], out version))
-                        {
-                            throw new FormatException($"Invalid version: {subpaths[2]}");
-                        }
-
-                        return new PackageIdentity(id, version);
-                    }
-
-                    // Or, a search query, like: /packages, /packages?q=uno
-                    else
-                    {
-                        var query = new QueryParameterCollection(location)
-                            .Aggregate(
-                                new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase),
-                                static (dict, kvp) =>
-                                {
-                                    dict[kvp.Key] = kvp.Value;
-                                    return dict;
-                                }
-                            );
-
-                        // note: null is for landing page, which isn't exactly(depends on landing navigation impl) the same as the search page.
-                        return query.GetValueOrDefault("q") ?? string.Empty;
-                    }
-                }
-#endif
-
+                    WasmPackageIdentityRoute packageRoute => new PackageIdentity(packageRoute.Id, packageRoute.Version),
+                    WasmPackageSearchRoute searchRoute => searchRoute.Query,
+                    WasmPackageInvalidRoute => throw new FormatException($"Invalid path: {location}"),
+                    _ => DefaultFallbackResult()
+                };
+#else
                 if (this.Log().IsEnabled(LogLevel.Debug))
                 {
                     this.Log().Debug("parsing launch arg: " + e.Arguments);
@@ -439,6 +409,7 @@ namespace PackageExplorer
                 }
 
                 return DefaultFallbackResult();
+#endif
             }
             catch (Exception ex)
             {
@@ -528,7 +499,7 @@ namespace PackageExplorer
         /// <param name="e">Details about the navigation failure</param>
         void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
         {
-            throw new Exception($"Failed to load {e.SourcePageType.FullName}: {e.Exception}");
+            throw new InvalidOperationException($"Failed to load {e.SourcePageType.FullName}: {e.Exception}", e.Exception);
         }
 
         /// <summary>

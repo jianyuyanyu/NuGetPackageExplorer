@@ -17,6 +17,11 @@ namespace NuGetPackageExplorer.Services
     public class AppInsightsJsTelemetryService : ITelemetryService
     {
         private static readonly ILogger Logger = typeof(AppInsightsJsTelemetryService).Log();
+        private static readonly Action<ILogger, string, Exception?> LogInvokedJs =
+            LoggerMessage.Define<string>(
+                LogLevel.Trace,
+                new EventId(0, nameof(InvokeJS)),
+                "Invoking JS:\n```\n{Script}\n```");
 
         private readonly bool _initialized;
         private readonly List<ITelemetryServiceInitializer> _initializers;
@@ -36,7 +41,7 @@ namespace NuGetPackageExplorer.Services
             }
         }
 
-        private bool GetIsInitialized()
+        private static bool GetIsInitialized()
         {
             var result = InvokeJS("appInsights && !!appInsights.core");
 
@@ -59,6 +64,7 @@ namespace NuGetPackageExplorer.Services
 
         public void TrackException(Exception exception, IDictionary<string, string>? properties, IDictionary<string, double>? metrics)
         {
+            ArgumentNullException.ThrowIfNull(exception);
             if (!_initialized) return;
 
             Logger.DebugIfEnabled(() => $"TrackException: {exception}");
@@ -107,7 +113,7 @@ namespace NuGetPackageExplorer.Services
             InvokeJS($"appInsights.flush();");
         }
 
-        private static string? ToJsObject(IDictionary<string, string> o)
+        private static string? ToJsObject(Dictionary<string, string> o)
         {
             if (o == null) return null;
             if (o.Count == 0) return "{}";
@@ -124,12 +130,7 @@ namespace NuGetPackageExplorer.Services
         {
             if (Logger.IsEnabled(LogLevel.Trace))
             {
-                Logger.LogTrace(string.Join("\n",
-                    "Invoking JS:",
-                    "```",
-                    js,
-                    "```"
-                ));
+                LogInvokedJs(Logger, js, null);
             }
 
             return Uno.Foundation.WebAssemblyRuntime.InvokeJS(js);

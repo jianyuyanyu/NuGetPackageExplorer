@@ -11,17 +11,6 @@ var host = Host.CreateDefaultBuilder()
         s.AddApplicationInsightsTelemetryWorkerService();
         s.ConfigureFunctionsApplicationInsights();
         s.AddHttpClient();
-
-        s.Configure<LoggerFilterOptions>(static options =>
-        {
-            var toRemove = options.Rules.FirstOrDefault(static rule => rule.ProviderName
-                == "Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider");
-
-            if (toRemove is not null)
-            {
-                options.Rules.Remove(toRemove);
-            }
-        });
     })
     .ConfigureLogging(static logging => logging
         .AddFilter<ApplicationInsightsLoggerProvider>(null, LogLevel.Information))
